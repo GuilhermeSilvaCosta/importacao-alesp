@@ -1,4 +1,4 @@
-import axios from 'axios';
+import fs from 'fs';
 import xml2js from 'xml2js';
 import knex from '../../database/connection';
 
@@ -7,7 +7,7 @@ class DespesaController {
     try {
       const tableName = 'alesp_despesas_gabinete';
 
-      await knex.schema.dropTableIfExists(tableName);
+      /* await knex.schema.dropTableIfExists(tableName);
       await knex.schema.createTable(tableName, table => {
         table.string('Deputado', 150);
         table.integer('Matricula');
@@ -17,9 +17,10 @@ class DespesaController {
         table.string('CNPJ', 18);
         table.string('Fornecedor', 200);
         table.decimal('Valor', 20, 2);
-      });
+      }); */
 
-      const { data } = await axios.get('https://www.al.sp.gov.br/repositorioDados/deputados/despesas_gabinetes.xml');
+      const data = fs
+        .readFileSync('./src/xmls/despesas_gabinete.xml');
 
       const { despesas } = await xml2js.parseStringPromise(data, { mergeAttrs: true });
       const despesasSerialize = despesas.despesa.map(item => {
@@ -36,9 +37,21 @@ class DespesaController {
         };
       });
 
-      const ids = await knex.insert(despesasSerialize).into(tableName);
+      const filteredDespesas = despesasSerialize.filter((item, index) => index >= 470150);
 
-      res.json(ids);
+      let lote = [];
+      for (const despesa of filteredDespesas) {
+        lote.push(despesa);
+
+        if (lote.length === 50) {
+          // eslint-disable-next-line no-await-in-loop
+          await knex.insert(lote).into(tableName);
+          lote = [];
+        }
+      }
+      // await knex.insert(despesasSerialize).into(tableName);
+
+      res.json({ message: 'Dados importados com sucesso!' });
     } catch ({ message }) {
       res.status(500).json({ message });
     }

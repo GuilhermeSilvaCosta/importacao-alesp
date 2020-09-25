@@ -7,7 +7,7 @@ class ProposituraController {
     try {
       const tableName = 'alesp_proposituras';
 
-      await knex.schema.dropTableIfExists(tableName);
+      /* await knex.schema.dropTableIfExists(tableName);
       await knex.schema.createTable(tableName, table => {
         table.integer('IdDocumento').notNullable().primary();
         table.string('CodOriginalidade', 50);
@@ -19,7 +19,7 @@ class ProposituraController {
           .inTable('alesp_naturezas');
         table.dateTime('DtEntradaSistema');
         table.dateTime('DtPublicacao');
-      });
+      }); */
 
       const data = fs
         .readFileSync('./src/xmls/proposituras.xml');
@@ -27,7 +27,7 @@ class ProposituraController {
       const {
         proposituras,
       } = await xml2js.parseStringPromise(data, { mergeAttrs: true });
-      const tipos = proposituras.propositura.map(item => {
+      const propositurasSerialized = proposituras.propositura.map(item => {
         const [IdDocumento] = item.IdDocumento;
         const [CodOriginalidade] = item.CodOriginalidade || '';
         const [Ementa] = item.Ementa || '';
@@ -48,7 +48,26 @@ class ProposituraController {
         };
       });
 
-      await knex.insert(tipos).into(tableName);
+      const propositurasSemRepeticao = [];
+      propositurasSerialized.forEach(propositura => {
+        if (!propositurasSemRepeticao
+          .some(item => item.IdDocumento === propositura.IdDocumento)) {
+          propositurasSemRepeticao.push(propositura);
+        }
+      });
+
+      let lote = [];
+      for (const propositura of propositurasSemRepeticao) {
+        lote.push(propositura);
+
+        if (lote.length === 10) {
+          // eslint-disable-next-line no-await-in-loop
+          await knex.insert(lote).into(tableName);
+          lote = [];
+        }
+      }
+
+      // await knex.insert(propositurasSerialized).into(tableName);
 
       res.json({ message: 'Dados importados com sucesso!' });
     } catch ({ message }) {
